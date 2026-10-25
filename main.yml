@@ -1,22 +1,23 @@
-name: Build Rasmi Android
+
+name: Build Zahrati APK
 
 on:
-  push:
-    branches: [ main, master ]
   workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
 
 permissions:
   contents: read
 
-defaults:
-  run:
-    shell: bash
-
 jobs:
   build:
+    name: Build Android APK
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout source
+      - name: Download project
         uses: actions/checkout@v4
 
       - name: Set up Java 17
@@ -24,22 +25,20 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
-      - name: Install Gradle 8.9
-        run: |
-          curl -fsSL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o "$RUNNER_TEMP/gradle.zip"
-          unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/gradle-8.9/bin" >> "$GITHUB_PATH"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
 
-      - name: Validate Gradle configuration and build debug APK
+      - name: Build debug APK
         run: gradle --no-daemon --stacktrace :app:assembleDebug
-
-      - name: Verify APK exists
-        run: test -s app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: rasmi-debug-apk
+          name: Zahrati-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          retention-days: 7
