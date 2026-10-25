@@ -1,12 +1,15 @@
+
 package com.zahrati.drawing
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
-import android.widget.ImageView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -17,29 +20,31 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
-private val BackgroundColor = Color(0xFF101116)
-private val CardColor = Color(0xFF1D2029)
-private val AccentColor = Color(0xFFB99AFF)
-private val MainTextColor = Color(0xFFF5F1FF)
-private val SecondaryTextColor = Color(0xFFAAA6B8)
+private val Bg = Color(0xFF101116)
+private val Panel = Color(0xFF1D2029)
+private val Purple = Color(0xFFB99AFF)
+private val WhiteText = Color(0xFFF5F1FF)
+private val Muted = Color(0xFFAAA6B8)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
-                    primary = AccentColor,
-                    background = BackgroundColor,
-                    surface = CardColor
+                    primary = Purple,
+                    background = Bg,
+                    surface = Panel
                 )
             ) {
                 CompositionLocalProvider(
@@ -55,63 +60,41 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun ZahratiApp() {
     var selectedImage by remember { mutableStateOf<Uri?>(null) }
-    var currentScreen by remember { mutableStateOf("home") }
-    var imageOpacity by remember { mutableFloatStateOf(0.55f) }
+    var stage by remember { mutableIntStateOf(1) }
+    var showTrace by remember { mutableStateOf(false) }
 
-    val imagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
             selectedImage = uri
-            currentScreen = "trace"
+            stage = 1
+            showTrace = true
         }
     }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = BackgroundColor
+        color = Bg
     ) {
-        when (currentScreen) {
-            "trace" -> {
-                TraceScreen(
-                    image = selectedImage,
-                    opacity = imageOpacity,
-                    onOpacityChange = { imageOpacity = it },
-                    onChooseImage = {
-                        imagePicker.launch("image/*")
-                    },
-                    onBack = { currentScreen = "home" }
-                )
-            }
-
-            "library" -> {
-                LibraryScreen(
-                    onBack = { currentScreen = "home" },
-                    onChooseImage = {
-                        imagePicker.launch("image/*")
-                    }
-                )
-            }
-
-            else -> {
-                HomeScreen(
-                    onChooseImage = {
-                        imagePicker.launch("image/*")
-                    },
-                    onOpenLibrary = {
-                        currentScreen = "library"
-                    }
-                )
-            }
+        if (showTrace) {
+            DrawingScreen(
+                uri = selectedImage,
+                stage = stage,
+                onStageChange = { stage = it },
+                onChooseImage = { picker.launch("image/*") },
+                onBack = { showTrace = false }
+            )
+        } else {
+            HomeScreen(
+                onChooseImage = { picker.launch("image/*") }
+            )
         }
     }
 }
 
 @Composable
-fun HomeScreen(
-    onChooseImage: () -> Unit,
-    onOpenLibrary: () -> Unit
-) {
+fun HomeScreen(onChooseImage: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -119,26 +102,27 @@ fun HomeScreen(
             .padding(22.dp),
         horizontalAlignment = Alignment.Start
     ) {
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(28.dp))
 
         Text(
-            text = "رسمي",
-            color = AccentColor,
-            fontSize = 17.sp
-        )
-
-        Spacer(Modifier.height(5.dp))
-
-        Text(
-            text = "زهرتي",
-            color = MainTextColor,
-            fontSize = 36.sp
+            "زهرتي",
+            color = Purple,
+            fontSize = 36.sp,
+            fontWeight = FontWeight.Bold
         )
 
         Text(
-            text = "تعلّم الرسم خطوة بخطوة",
-            color = SecondaryTextColor,
-            fontSize = 16.sp
+            "مختبر الرسم والتعلّم",
+            color = WhiteText,
+            fontSize = 20.sp
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        Text(
+            "حوّل صورتك إلى خطوط تساعدك على تعلّم الرسم.",
+            color = Muted,
+            fontSize = 15.sp
         )
 
         Spacer(Modifier.height(28.dp))
@@ -147,120 +131,125 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(190.dp)
-                .background(
-                    CardColor,
-                    RoundedCornerShape(24.dp)
-                )
-                .padding(20.dp),
+                .background(Panel, RoundedCornerShape(24.dp)),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("✦", fontSize = 42.sp, color = AccentColor)
-                Spacer(Modifier.height(8.dp))
+                Text("✎", color = Purple, fontSize = 56.sp)
                 Text(
-                    "حوّل فكرتك إلى رسمة",
-                    color = MainTextColor,
-                    fontSize = 21.sp
+                    "ابدأ من صورتك",
+                    color = WhiteText,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
-                Spacer(Modifier.height(6.dp))
                 Text(
-                    "اختر صورة وابدأ التدريب",
-                    color = SecondaryTextColor,
-                    fontSize = 14.sp
-                )
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-
-        Text(
-            "ابدأ الآن",
-            color = MainTextColor,
-            fontSize = 22.sp
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        FeatureCard(
-            title = "ارسم من صورة",
-            description = "اختر صورة من هاتفك وتدرّب على تتبّع خطوطها",
-            symbol = "✎",
-            onClick = onChooseImage
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        FeatureCard(
-            title = "مكتبة رسوماتي",
-            description = "افتح صورة جديدة من جهازك للتدريب",
-            symbol = "▧",
-            onClick = onOpenLibrary
-        )
-
-        Spacer(Modifier.height(24.dp))
-
-        Text(
-            "نصيحة: خفّض شفافية الصورة لتتمكن من رؤية خطوطك على الورق.",
-            color = SecondaryTextColor,
-            fontSize = 14.sp
-        )
-
-        Spacer(Modifier.height(24.dp))
-    }
-}
-
-@Composable
-fun FeatureCard(
-    title: String,
-    description: String,
-    symbol: String,
-    onClick: () -> Unit
-) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = CardColor
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    title,
-                    color = MainTextColor,
-                    fontSize = 18.sp
-                )
-                Spacer(Modifier.height(5.dp))
-                Text(
-                    description,
-                    color = SecondaryTextColor,
+                    "استخرج الخطوط وبدّل مستوى التفاصيل",
+                    color = Muted,
                     fontSize = 13.sp
                 )
             }
-
-            Spacer(Modifier.width(12.dp))
-
-            Text(
-                symbol,
-                color = AccentColor,
-                fontSize = 30.sp
-            )
         }
+
+        Spacer(Modifier.height(22.dp))
+
+        Button(
+            onClick = onChooseImage,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Purple,
+                contentColor = Color(0xFF17121F)
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text("اختيار صورة والبدء بالرسم", fontSize = 17.sp)
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        Text("طريقة الاستخدام", color = WhiteText, fontSize = 20.sp)
+
+        Spacer(Modifier.height(10.dp))
+
+        InfoCard("١", "اختر صورة واضحة من هاتفك.")
+        InfoCard("٢", "شاهد الخطوط التي يستخرجها التطبيق.")
+        InfoCard("٣", "بدّل مراحل التفاصيل واختر النتيجة المناسبة للتدريب.")
+
+        Spacer(Modifier.height(16.dp))
+
+        Text(
+            "ملاحظة: المعالجة الحالية تستخرج الحواف، ولا تفهم عناصر الصورة أو تقسّمها تلقائيًا إلى خطوات رسم احترافية.",
+            color = Muted,
+            fontSize = 13.sp
+        )
     }
 }
 
 @Composable
-fun TraceScreen(
-    image: Uri?,
-    opacity: Float,
-    onOpacityChange: (Float) -> Unit,
+fun InfoCard(number: String, text: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 5.dp)
+            .background(Panel, RoundedCornerShape(14.dp))
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(number, color = Purple, fontSize = 20.sp)
+        Spacer(Modifier.width(12.dp))
+        Text(text, color = WhiteText, fontSize = 14.sp)
+    }
+}
+
+@Composable
+fun DrawingScreen(
+    uri: Uri?,
+    stage: Int,
+    onStageChange: (Int) -> Unit,
     onChooseImage: () -> Unit,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
+
+    var processedBitmap by remember(uri, stage) {
+        mutableStateOf<Bitmap?>(null)
+    }
+    var loading by remember(uri, stage) {
+        mutableStateOf(false)
+    }
+    var error by remember(uri, stage) {
+        mutableStateOf<String?>(null)
+    }
+
+    LaunchedEffect(uri, stage) {
+        if (uri == null) {
+            processedBitmap = null
+            return@LaunchedEffect
+        }
+
+        loading = true
+        error = null
+
+        try {
+            val result = withContext(Dispatchers.IO) {
+                val source = context.contentResolver
+                    .openInputStream(uri)
+                    ?.use { BitmapFactory.decodeStream(it) }
+                    ?: throw IllegalStateException("تعذّر فتح الصورة")
+
+                DrawingProcessor.makeLineArt(source, stage)
+            }
+
+            processedBitmap = result
+        } catch (e: Exception) {
+            processedBitmap = null
+            error = "تعذّرت معالجة الصورة. جرّب صورة أخرى."
+        } finally {
+            loading = false
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -271,15 +260,16 @@ fun TraceScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = onBack) {
-                Text("رجوع", color = AccentColor)
+                Text("رجوع", color = Purple)
             }
 
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(8.dp))
 
             Text(
-                "وضع التدريب",
-                color = MainTextColor,
-                fontSize = 22.sp
+                "تحويل الصورة إلى خطوط",
+                color = WhiteText,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.Bold
             )
         }
 
@@ -289,54 +279,60 @@ fun TraceScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .background(
-                    Color(0xFF292B33),
-                    RoundedCornerShape(18.dp)
-                ),
+                .background(Color.White, RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center
         ) {
-            if (image != null) {
-                AndroidView(
+            when {
+                loading -> CircularProgressIndicator(color = Purple)
+
+                error != null -> Text(
+                    error!!,
+                    color = Color.Red,
+                    modifier = Modifier.padding(20.dp)
+                )
+
+                processedBitmap != null -> Image(
+                    bitmap = processedBitmap!!.asImageBitmap(),
+                    contentDescription = "الصورة بعد استخراج الخطوط",
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(8.dp),
-                    factory = { context ->
-                        ImageView(context).apply {
-                            scaleType = ImageView.ScaleType.FIT_CENTER
-                            adjustViewBounds = true
-                        }
-                    },
-                    update = { view ->
-                        if (view.tag != image.toString()) {
-                            view.setImageURI(image)
-                            view.tag = image.toString()
-                        }
-                        view.alpha = opacity
-                    }
+                        .padding(8.dp)
                 )
-            } else {
-                Text(
-                    "اختر صورة للبدء",
-                    color = SecondaryTextColor
-                )
+
+                else -> Text("اختر صورة للبدء", color = Color.DarkGray)
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
 
         Text(
-            "شفافية الصورة: ${(opacity * 100).toInt()}%",
-            color = MainTextColor,
-            fontSize = 16.sp
+            "مرحلة التفاصيل: $stage من 4",
+            color = WhiteText,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        Text(
+            when (stage) {
+                1 -> "المرحلة الأولى: خطوط الحواف الأوضح"
+                2 -> "المرحلة الثانية: تفاصيل إضافية"
+                3 -> "المرحلة الثالثة: تفاصيل أكثر"
+                else -> "المرحلة الرابعة: استخراج حواف أكثر"
+            },
+            color = Muted,
+            fontSize = 13.sp
         )
 
         Slider(
-            value = opacity,
-            onValueChange = onOpacityChange,
-            valueRange = 0.15f..1f,
+            value = stage.toFloat(),
+            onValueChange = { onStageChange(it.toInt().coerceIn(1, 4)) },
+            valueRange = 1f..4f,
+            steps = 2,
             colors = SliderDefaults.colors(
-                thumbColor = AccentColor,
-                activeTrackColor = AccentColor
+                thumbColor = Purple,
+                activeTrackColor = Purple
             )
         )
 
@@ -344,62 +340,13 @@ fun TraceScreen(
             onClick = onChooseImage,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(54.dp),
+                .height(52.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = AccentColor,
+                containerColor = Purple,
                 contentColor = Color(0xFF17121F)
             )
         ) {
-            Text("اختيار صورة", fontSize = 17.sp)
-        }
-
-        Spacer(Modifier.height(10.dp))
-    }
-}
-
-@Composable
-fun LibraryScreen(
-    onBack: () -> Unit,
-    onChooseImage: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(22.dp)
-    ) {
-        TextButton(onClick = onBack) {
-            Text("رجوع", color = AccentColor)
-        }
-
-        Spacer(Modifier.height(20.dp))
-
-        Text(
-            "مكتبة الرسومات",
-            color = MainTextColor,
-            fontSize = 27.sp
-        )
-
-        Spacer(Modifier.height(10.dp))
-
-        Text(
-            "اختر رسمة من صور هاتفك لتبدأ التدريب عليها.",
-            color = SecondaryTextColor,
-            fontSize = 15.sp
-        )
-
-        Spacer(Modifier.height(24.dp))
-
-        Button(
-            onClick = onChooseImage,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(54.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = AccentColor,
-                contentColor = Color(0xFF17121F)
-            )
-        ) {
-            Text("اختيار صورة من الهاتف")
+            Text("اختيار صورة أخرى", fontSize = 16.sp)
         }
     }
 }
