@@ -1,4 +1,3 @@
-
 package com.zahrati.drawing
 
 import android.graphics.Bitmap
